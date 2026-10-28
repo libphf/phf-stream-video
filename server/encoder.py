@@ -5,9 +5,22 @@ import time
 from typing import Optional, Tuple
 import numpy as np
 
+class PHFEncodeOptions(ctypes.Structure):
+    """v1.1 encoder configuration: mode (MED/PALETTE/AUTO) and effort (BEST/FAST)."""
+    _fields_ = [
+        ("mode", ctypes.c_int),
+        ("effort", ctypes.c_int),
+    ]
+
+# Streaming defaults: MED prediction without trial variants = minimum latency
+PHF_MODE_MED = 1
+PHF_EFFORT_FAST = 1
+
 class PHFEncoder:
     def __init__(self, lib_path: Optional[str] = None):
         self._lib = None
+        self._has_options = False
+        self._opts = PHFEncodeOptions(PHF_MODE_MED, PHF_EFFORT_FAST)
         self._load_library(lib_path)
 
     def _load_library(self, lib_path: Optional[str]):
@@ -50,7 +63,40 @@ class PHFEncoder:
         if not self._lib:
             raise RuntimeError(f"Could not load libphf library. Searched: {search_paths}")
             
-        # Bind C prototypes
+        self._lib.phf_free.argtypes = [ctypes.c_void_p]
+        self._lib.phf_free.restype = None
+
+        # Detect whether libphf uses the 6-parameter signature (v1.1 with options)
+        # or legacy 5-parameter signature (v1.0)
+        self._detect_abi()
+
+    def _detect_abi(self):
+        dummy = (ctypes.c_uint8 * 3)(10, 20, 30)
+        opts = PHFEncodeOptions(PHF_MODE_MED, PHF_EFFORT_FAST)
+        out_sz = ctypes.c_size_t(0)
+        
+        try:
+            self._lib.phf_encode_memory.argtypes = [
+                ctypes.POINTER(ctypes.c_uint8),
+                ctypes.c_uint32,
+                ctypes.c_uint32,
+                ctypes.c_uint8,
+                ctypes.POINTER(PHFEncodeOptions),
+                ctypes.POINTER(ctypes.c_size_t)
+            ]
+            self._lib.phf_encode_memory.restype = ctypes.POINTER(ctypes.c_uint8)
+            test_ptr = self._lib.phf_encode_memory(dummy, 1, 1, 3, ctypes.byref(opts), ctypes.byref(out_sz))
+            if test_ptr and out_sz.value > 0:
+                self._lib.phf_free(test_ptr)
+                self._has_options = True
+                return
+            if test_ptr:
+                self._lib.phf_free(test_ptr)
+        except Exception:
+            pass
+
+        # Fallback to 5-parameter v1.0 prototype
+        self._has_options = False
         self._lib.phf_encode_memory.argtypes = [
             ctypes.POINTER(ctypes.c_uint8),
             ctypes.c_uint32,
@@ -59,9 +105,6 @@ class PHFEncoder:
             ctypes.POINTER(ctypes.c_size_t)
         ]
         self._lib.phf_encode_memory.restype = ctypes.POINTER(ctypes.c_uint8)
-        
-        self._lib.phf_free.argtypes = [ctypes.c_void_p]
-        self._lib.phf_free.restype = None
 
     def encode(self, rgb_frame: np.ndarray) -> Optional[Tuple[bytes, float, int, int]]:
         """
@@ -84,7 +127,10 @@ class PHFEncoder:
         pixels_ptr = rgb_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         
         t0 = time.perf_counter()
-        ptr = self._lib.phf_encode_memory(pixels_ptr, w, h, ch, ctypes.byref(out_sz))
+        if self._has_options:
+            ptr = self._lib.phf_encode_memory(pixels_ptr, w, h, ch, ctypes.byref(self._opts), ctypes.byref(out_sz))
+        else:
+            ptr = self._lib.phf_encode_memory(pixels_ptr, w, h, ch, ctypes.byref(out_sz))
         dt_ms = (time.perf_counter() - t0) * 1000.0
         
         if not ptr:
