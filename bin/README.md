@@ -4,9 +4,11 @@ This directory contains pre-compiled native dynamic libraries for the PHF encode
 The server automatically discovers and loads the matching binary for your platform.
 
 ## Included Binaries
-- **Windows (x64)**: `phf.dll`.
+- **Windows (x64)**: `phf.dll`. **Outdated:** it predates the `options` parameter of
+  `phf_encode_memory()`, so `server/encoder.py` refuses it at startup. Rebuild it from
+  libphf/phf `main` with MSVC (`cmake -S phf -B build && cmake --build build --config Release`).
 - **macOS (universal: Apple Silicon arm64 + Intel x86_64, macOS 11+)**: `libphf.dylib`.
-  Built from [libphf/phf](https://github.com/libphf/phf) commit `8086543` without OpenMP, so it
+  Built from [libphf/phf](https://github.com/libphf/phf) commit `1cb1f80` without OpenMP, so it
   depends only on `libSystem` (no Homebrew `libomp` needed).
 
 ## Building from source

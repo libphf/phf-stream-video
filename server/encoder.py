@@ -5,9 +5,21 @@ import time
 from typing import Optional, Tuple
 import numpy as np
 
+# phf_mode_t / phf_effort_t from libphf's phf.h
+PHF_MODE_AUTO, PHF_MODE_MED, PHF_MODE_PALETTE = 0, 1, 2
+PHF_EFFORT_BEST, PHF_EFFORT_FAST = 0, 1
+
+
+class PHFEncodeOptions(ctypes.Structure):
+    _fields_ = [("mode", ctypes.c_int), ("effort", ctypes.c_int)]
+
+
 class PHFEncoder:
-    def __init__(self, lib_path: Optional[str] = None):
+    def __init__(self, lib_path: Optional[str] = None, mode: int = PHF_MODE_MED):
+        """mode is fixed for the whole stream: MED suits camera and video frames,
+        PALETTE suits screen content. Frames are encoded once (FAST effort)."""
         self._lib = None
+        self._options = PHFEncodeOptions(mode, PHF_EFFORT_FAST)
         self._load_library(lib_path)
 
     def _load_library(self, lib_path: Optional[str]):
@@ -56,12 +68,20 @@ class PHFEncoder:
             ctypes.c_uint32,
             ctypes.c_uint32,
             ctypes.c_uint8,
+            ctypes.POINTER(PHFEncodeOptions),
             ctypes.POINTER(ctypes.c_size_t)
         ]
         self._lib.phf_encode_memory.restype = ctypes.POINTER(ctypes.c_uint8)
         
         self._lib.phf_free.argtypes = [ctypes.c_void_p]
         self._lib.phf_free.restype = None
+
+        # A library built before the options parameter reads our options pointer as
+        # out_size and leaves the real one at 0: refuse it instead of streaming garbage.
+        probe = self.encode(np.zeros((1, 1, 3), dtype=np.uint8))
+        if probe is None or probe[3] == 0:
+            raise RuntimeError(f"libphf at {self._lib._name} predates phf_encode_options_t; "
+                               "rebuild it from libphf/phf main (see bin/README.md)")
 
     def encode(self, rgb_frame: np.ndarray) -> Optional[Tuple[bytes, float, int, int]]:
         """
@@ -84,7 +104,7 @@ class PHFEncoder:
         pixels_ptr = rgb_frame.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         
         t0 = time.perf_counter()
-        ptr = self._lib.phf_encode_memory(pixels_ptr, w, h, ch, ctypes.byref(out_sz))
+        ptr = self._lib.phf_encode_memory(pixels_ptr, w, h, ch, ctypes.byref(self._options), ctypes.byref(out_sz))
         dt_ms = (time.perf_counter() - t0) * 1000.0
         
         if not ptr:
