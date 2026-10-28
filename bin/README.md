@@ -6,7 +6,7 @@ The server automatically discovers and loads the matching binary for your platfo
 ## Included Binaries
 - **Windows (x64)**: `phf.dll` (v1.1, with the `phf_encode_options_t` API).
 - **macOS (universal: Apple Silicon arm64 + Intel x86_64, macOS 11+)**: `libphf.dylib`.
-  Built from [libphf/phf](https://github.com/libphf/phf) commit `1cb1f80` without OpenMP, so it
+  Built from [libphf/phf](https://github.com/libphf/phf) commit `a5479b1` without OpenMP, so it
   depends only on `libSystem` (no Homebrew `libomp` needed).
 
 ## Building from source
