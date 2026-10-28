@@ -1,0 +1,6 @@
+# PHF Stream Video Dependencies
+websockets>=13.0  # websockets.asyncio.server API
+numpy>=1.24.0
+av>=10.0.0        # PyAV demuxing, decoding & audio extraction
+# opencv-python works as a video-only fallback when PyAV is not installed;
+# do not install both on macOS (each bundles its own FFmpeg)

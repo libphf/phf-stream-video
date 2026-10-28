@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHF Video Stream — Lossless Video Player</title>
+    <link rel="stylesheet" href="style.css?v=1.0.0">
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <span class="logo-icon">🎬</span>
+            <div class="brand-title">
+                <h1>PHF Video Stream</h1>
+                <span class="sub">Lossless Video Streaming via WebAssembly SIMD128</span>
+            </div>
+            <span class="badge wasm-badge">WASM SIMD128</span>
+            <span class="badge lossless-badge">100% Bit-Exact</span>
+        </div>
+        <div class="connection-status" id="connStatus">
+            <span class="dot connecting"></span>
+            <span class="text">Connecting...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="video-container">
+            <!-- Alert banner for errors or messages -->
+            <div class="alert-banner hidden" id="alertBanner">
+                <span class="icon">⚠️</span>
+                <span class="msg" id="alertMsg">Notice</span>
+                <button class="btn-close" id="btnCloseAlert">✕</button>
+            </div>
+
+            <div class="viewport">
+                <canvas id="videoCanvas" width="640" height="360"></canvas>
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="spinner"></div>
+                    <p id="loadingText">Connecting to PHF stream server...</p>
+                </div>
+            </div>
+
+            <!-- Playback Control Bar -->
+            <div class="playback-bar">
+                <button class="btn btn-ctrl" id="btnPlayPause" title="Play / Pause">
+                    <span id="playIcon">⏸️</span>
+                </button>
+                <div class="timeline-container">
+                    <input type="range" id="timelineSlider" min="0" max="100" value="0" step="0.1">
+                    <div class="time-display">
+                        <span id="currentTime">00:00</span> / <span id="totalDuration">00:00</span>
+                    </div>
+                </div>
+                <button class="btn btn-ctrl btn-loop active" id="btnLoop" title="Toggle Loop">
+                    🔁 Loop
+                </button>
+            </div>
+
+            <!-- Real-Time Metrics & Stats Bar (Under Playback Controls) -->
+            <div class="stats-bar" id="statsBar">
+                <div class="stat-item">
+                    <span class="stat-label">FPS</span>
+                    <span class="stat-val highlight" id="hudFps">0.0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Latency</span>
+                    <span class="stat-val green" id="hudLatency">-- ms</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Bitrate</span>
+                    <span class="stat-val" id="hudBitrate">0.0 Mbps</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Decode (WASM)</span>
+                    <span class="stat-val" id="hudDecodeTime">0.0 ms</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Compression</span>
+                    <span class="stat-val green" id="hudRatio">--</span>
+                </div>
+            </div>
+        </div>
+
+        <aside class="sidebar">
+            <div class="card">
+                <div class="card-header-row">
+                    <h3>📁 Video Source</h3>
+                    <button class="btn btn-refresh" id="btnRefreshVideos" title="Scan directory for new videos">🔄 Rescan</button>
+                </div>
+
+                <div class="control-group">
+                    <label for="videoSelect">Select Video File:</label>
+                    <select id="videoSelect">
+                        <option value="">Scanning videos directory...</option>
+                    </select>
+                </div>
+
+                <!-- No videos found guidance -->
+                <div class="empty-state hidden" id="noVideosAlert">
+                    <p class="warn-title">📂 Pasta <code>videos/</code> vazia</p>
+                    <p class="warn-desc">Coloque arquivos de vídeo (<code>.mp4</code>, <code>.mkv</code>, <code>.avi</code>, <code>.mov</code>, <code>.webm</code>) dentro da pasta <strong>videos/</strong> e clique em <strong>Rescan</strong>.</p>
+                </div>
+
+                <div class="video-meta-box" id="videoMetaBox">
+                    <div class="meta-row"><span>Resolution:</span> <strong id="metaRes">--</strong></div>
+                    <div class="meta-row"><span>Framerate:</span> <strong id="metaFps">--</strong></div>
+                    <div class="meta-row"><span>Duration:</span> <strong id="metaDuration">--</strong></div>
+                    <div class="meta-row"><span>Audio Track:</span> <strong id="metaAudio">--</strong></div>
+                    <div class="meta-row"><span>File Size:</span> <strong id="metaSize">--</strong></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header-row">
+                    <h3>🔊 Audio Playback</h3>
+                    <div class="vu-meter" id="vuMeter" title="Live audio level">
+                        <div class="vu-bar" id="vuBar"></div>
+                    </div>
+                </div>
+
+                <button class="btn btn-toggle audio-off" id="btnToggleAudio">
+                    <span class="icon">🔇</span>
+                    <span id="btnAudioText">Enable Audio</span>
+                </button>
+
+                <div class="control-group">
+                    <div class="slider-row">
+                        <label for="volSlider">Volume Boost / Gain:</label>
+                        <span class="val-badge" id="volVal">100%</span>
+                    </div>
+                    <input type="range" id="volSlider" min="0" max="3" step="0.05" value="1.0">
+                </div>
+            </div>
+
+            <div class="card info-card">
+                <h4>💎 Pure High-Fidelity Streaming</h4>
+                <p>O PHF transmite cada quadro decodificado <strong>sem nenhuma perda</strong>, em RGB 4:4:4. Com arquivos H.264/H.265 os artefatos e o 4:2:0 já vêm da origem; a vantagem de qualidade aparece com fontes sem perdas.</p>
+                <ul class="features-list">
+                    <li>⚡ <strong>SIMD128 Decodificação:</strong> Descompactação direta no navegador.</li>
+                    <li>🎬 <strong>Multi-Formato:</strong> Suporte a MP4, MKV, AVI, MOV e WebM.</li>
+                    <li>⏱️ <strong>Clock Pacing:</strong> Sincronização precisa na taxa nativa de quadros.</li>
+                </ul>
+            </div>
+        </aside>
+    </main>
+
+    <script type="module" src="stream-client.js?v=1.0.0"></script>
+</body>
+</html>
