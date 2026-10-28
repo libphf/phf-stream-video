@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.vscode/
+.idea/
+.DS_Store
+.venv/
+venv/
+build/
+
+# Do not track temporary or extra large videos
+videos/*.tmp
